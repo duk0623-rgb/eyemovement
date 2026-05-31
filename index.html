@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>VR MFBF 조절-도약 안구운동 V15.0 (피버 콤보 시스템)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
+    #control-panel {
+      position: absolute; top: 15px; left: 15px; z-index: 99999;
+      background: rgba(11, 15, 26, 0.96); color: white; padding: 22px;
+      border-radius: 12px; border: 1px solid #3b82f6; width: 290px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .panel-title { font-size: 16px; font-weight: bold; color: #38bdf8; margin-bottom: 15px; text-align: center; border-bottom: 1px solid #3b82f6; padding-bottom: 8px; }
+    .panel-group { margin-bottom: 14px; }
+    label { display: block; margin-bottom: 6px; font-size: 13px; color: #cbd5e1; font-weight: bold; }
+    select, input[type="range"] { width: 100%; padding: 8px; background: #1e293b; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box; font-size: 13px; }
+    .display-value { float: right; color: #38bdf8; font-weight: bold; }
+    .btn { width: 100%; padding: 11px; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 8px; font-size: 14px; }
+    #start-btn { background: #22c55e; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3); }
+    
+    /* 스코어보드 디자인 강화 */
+    #score-board { 
+      position: fixed; top: 20px; right: 20px; z-index: 99999; 
+      background: rgba(15, 23, 42, 0.95); color: #22c55e; padding: 18px 22px; 
+      border-radius: 10px; border: 2px solid #22c55e; font-family: monospace; width: 240px; 
+    }
+    .score-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 15px; }
+    
+    /* 콤보 및 피버 UI 알림 이펙트 */
+    #combo-alert { font-size: 24px; font-weight: bold; color: #eab308; text-align: center; margin-top: 5px; min-height: 30px; text-shadow: 0 0 8px rgba(234,179,8,0.6); }
+    #fever-indicator { display: none; text-align: center; color: #ff007f; font-weight: bold; font-size: 18px; animation: blink 0.5s infinite alternate; margin-top: 2px; }
+    
+    @keyframes blink { from { opacity: 0.4; } to { opacity: 1; } }
+    .exit-vr-btn { width: 100%; background: #ef4444; color: white; border: none; border-radius: 4px; padding: 6px 10px; font-weight: bold; cursor: pointer; font-size: 11px; margin-top: 8px; display: none; }
+    
+    #result-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100000; background: rgba(11, 16, 26, 0.98); color: white; padding: 35px 50px; border-radius: 15px; border: 3px solid #38bdf8; text-align: center; }
+    #result-modal h1 { color: #38bdf8; margin-top: 0; }
+    #result-modal .final-score { font-size: 42px; color: #eab308; margin: 20px 0; font-weight: bold; }
+    #result-modal .reset-btn { background: #38bdf8; color: #000; padding: 10px 25px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
+  </style>
+  
+  <script>
+    AFRAME.registerComponent('stereo-eye-lock', {
+      schema: { eye: {type: 'string', default: 'both'} },
+      init: function () {
+        this.layerMask = (this.data.eye === 'left') ? 1 : (this.data.eye === 'right' ? 2 : 0);
+        this.el.addEventListener('object3dset', () => { this.applyLayer(); });
+        this.applyLayer();
+      },
+      applyLayer: function () {
+        const obj = this.el.getObject3D('mesh') || this.el.object3D;
+        if (obj) {
+          obj.layers.set(this.layerMask);
+          obj.traverse(child => { if(child.layers) child.layers.set(this.layerMask); });
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+
+  <div id="control-panel">
+    <div class="panel-title">🎮 MFBF 조절 홱보기 V15.0</div>
+    
+    <div class="panel-group">
+      <label>⏰ 총 훈련 시간 설정</label>
+      <select id="training-time-select">
+        <option value="60">1분 (테스트용)</option>
+        <option value="300">5분 (기본 안구운동)</option>
+        <option value="600" selected>10분 (정밀 집중)</option>
+      </select>
+    </div>
+
+    <div class="panel-group">
+      <label>↔️ 무작위 발생 시야 반경 <span class="display-value" id="range-txt">1.40</span></label>
+      <input type="range" id="range-slider" min="0.50" max="2.40" value="1.40" step="0.10">
+    </div>
+
+    <div class="panel-group" style="border-top: 1px dashed #475569; padding-top: 12px; margin-top: 12px;">
+      <label>🔄 배경 왜곡 속도 (0~60) <span class="display-value" id="bg-speed-txt">5</span></label>
+      <input type="range" id="bg-speed-slider" min="0" max="60" value="5" step="1">
+    </div>
+
+    <div class="panel-group">
+      <label>🧭 배경 방향 제어 모드</label>
+      <select id="bg-mode-select" onchange="toggleManualDirectionUI()">
+        <option value="manual">수동 고정 모드</option>
+        <option value="auto-interval">자동 교대 전환 모드</option>
+        <option value="pop-linked" selected>풍선 터짐 연동 모드</option>
+      </select>
+    </div>
+
+    <div class="panel-group" id="manual-direction-group" style="display: none;">
+      <label>➡️ 수동 방향 지정</label>
+      <select id="bg-direction-select">
+        <option value="left" selected>왼쪽으로 흐름</option>
+        <option value="right">오른쪽으로 흐름</option>
+      </select>
+    </div>
+    
+    <button id="start-btn" class="btn" onclick="startFusionTraining()">▶️ 신나는 안구 게임 시작</button>
+  </div>
+
+  <!-- 인게임 스코어 보드 (콤보/피버 연동) -->
+  <div id="score-board">
+    <div class="score-row" style="color: #ef4444; font-size: 18px; font-weight: bold;">
+      <span>TIME</span><span id="val-time">00:00</span>
+    </div>
+    <div style="color: #cbd5e1; font-size: 12px; margin-bottom: 6px; font-weight: bold;">
+      타겟 상태: <span id="active-eye-txt" style="color:#ff2a2a;">왼쪽눈 (빨강)</span>
+    </div>
+    <div class="score-row" style="color: #38bdf8;">
+      <span>SCORE</span><span id="val-score">0000</span>
+    </div>
+    <div class="score-row" style="color: #a855f7; font-size: 13px;" id="distance-indicator-row">
+      <span>훈련 타겟 거리</span><span id="val-distance">-.-m</span>
+    </div>
+    
+    <hr style="border: 0; border-top: 1px solid #22c55e; margin: 8px 0;">
+    <div id="combo-alert"></div>
+    <div id="fever-indicator">🔥 FEVER MODE ACTIVE 🔥</div>
+    
+    <button id="exit-vr-control" class="exit-vr-btn" onclick="exitVRModeManually()">🔴 훈련 중단 및 복귀</button>
+  </div>
+
+  <div id="result-modal">
+    <h1>🏆 안구 오락실 훈련 종료 🏆</h1>
+    <p style="color: #aaa; margin: 0;">우리 아이 최종 훈련 스코어</p>
+    <div class="final-score"><span id="modal-final-score">0</span> 점</div>
+    <button class="reset-btn" onclick="location.reload()">다시 도전하기</button>
+  </div>
+
+  <a-scene background="color: #000000" vr-mode-ui="enabled: true">
+    <a-assets>
+      <canvas id="bgCheckerCanvas" width="512" height="512"></canvas>
+    </a-assets>
+
+    <!-- 배경 하늘 평면 -->
+    <a-sky id="rotating-bg" src="#bgCheckerCanvas" radius="50" material="shader: flat; repeat: 16 16; side: back;" stereo-eye-lock="eye: both"></a-sky>
+
+    <a-entity id="cameraRig">
+      <a-entity id="mainCamera" camera look-controls position="0 1.6 0">
+        <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 100; interval: 12;"></a-entity>
+        <a-ring radius-inner="0.022" radius-outer="0.035" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.8; depthTest: false;"></a-ring>
+      </a-entity>
+    </a-entity>
+
+    <a-entity id="magic-eye-board" visible="true">
+      
+      <!-- 왼쪽 눈 레이어 -->
+      <a-entity id="left-eye-container" stereo-eye-lock="eye: left">
+        <!-- 기본 형상 구체 외에 자식 노드로 다양한 피버 모프용 지오메트리 사전 세팅 -->
+        <a-entity id="balloon-left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.15; metalness: 0.2;">
+          <a-cone id="cone-left" radius-top="0.005" color="#cc1111"></a-cone>
+        </a-entity>
+      </a-entity>
+      
+      <!-- 오른쪽 눈 레이어 -->
+      <a-entity id="right-eye-container" stereo-eye-lock="eye: right">
+        <a-entity id="balloon-right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.15; metalness: 0.2;">
+          <a-cone id="cone-right" radius-top="0.005" color="#047857"></a-cone>
+        </a-entity>
+      </a-entity>
+
+      <!-- 동적 거리 자동 추적 투명 콜라이더 구체 -->
+      <a-entity id="gaze-collision-trigger" class="gaze-secure-trigger" geometry="primitive: sphere;" material="visible: false;" stereo-eye-lock="eye: both"></a-entity>
+      
+    </a-entity>
+
+    <a-entity id="particle-group"></a-entity>
+  </a-scene>
+
+  <script>
+    const bgCanvas = document.getElementById('bgCheckerCanvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    const bSize = 512; const bRows = 4; const bCols = 4;
+    const bW = bSize / bCols; const bH = bSize / bRows;
+    
+    function drawBackgroundGrid(fever) {
+      for (let r = 0; r < bRows; r++) {
+        for (let c = 0; c < bCols; c++) {
+          if (fever) {
+            // 피버 모드일 때 역동적인 네온 그리드로 변경하여 시각 피질 강력 흥분 자극
+            bgCtx.fillStyle = ((r + c) % 2 === 0) ? '#1e1b4b' : '#ff007f';
+          } else {
+            bgCtx.fillStyle = ((r + c) % 2 === 0) ? '#FFFFFF' : '#000000';
+          }
+          bgCtx.fillRect(c * bW, r * bH, bW, bH);
+        }
+      }
+      // A-Frame 하늘 텍스처 강제 리프레시 업데이트
+      const sky = document.getElementById('rotating-bg');
+      if(sky && sky.object3DMap.mesh) {
+        sky.object3DMap.mesh.material.map.needsUpdate = true;
+      }
+    }
+    drawBackgroundGrid(false);
+
+    let audioCtx = null; let score = 0; let randomRange = 1.40; 
+    let rotationSpeed = 5; let bgAngle = 0; let isTrainingActive = false; let isPopping = false; 
+
+    // 게임 인터랙션 핵심 스태츠 변수
+    let comboCount = 0;
+    let isFeverMode = false;
+    let targetShapeIndex = 0; // 0: 구체, 1: 토러스(도넛), 2: 정육면체, 3: 콘
+
+    let bgMode = "pop-linked";
+    let currentDirectionSign = -1; 
+    let autoIntervalTimer = null;
+
+    let elapsedInterval = null; let totalSecondsElapsed = 0; let targetSeconds = 600;      
+    let activeTurn = "left"; 
+    let currentX = 0, currentY = 1.6, currentZ = -3.5;
+
+    document.getElementById('range-slider').addEventListener('input', (e) => {
+      randomRange = parseFloat(e.target.value);
+      document.getElementById('range-txt').innerText = randomRange.toFixed(2);
+      if(isTrainingActive) { renderAlternatingTargets(); }
+    });
+    document.getElementById('bg-speed-slider').addEventListener('input', (e) => {
+      rotationSpeed = parseInt(e.target.value);
+      document.getElementById('bg-speed-txt').innerText = rotationSpeed;
+    });
+
+    function toggleManualDirectionUI() {
+      const mode = document.getElementById('bg-mode-select').value;
+      const group = document.getElementById('manual-direction-group');
+      group.style.display = (mode === 'manual') ? 'block' : 'none';
+    }
+
+    // [V15.0 개조 핵심] 3차원 앞뒤 깊이 무작위 계산 및 원근 크기 보정 렌더링 엔진
+    function renderAlternatingTargets() {
+      if (!isTrainingActive) return;
+
+      const cameraEl = document.getElementById('mainCamera');
+      let camPos = {x: 0, y: 1.6, z: 0};
+      if (cameraEl && cameraEl.object3D) {
+        camPos.x = cameraEl.object3D.position.x;
+        camPos.y = cameraEl.object3D.position.y;
+        camPos.z = cameraEl.object3D.position.z;
+      }
+
+      // 1. Z축(깊이) 조절 범위를 최소 1.5m에서 최대 5.0m 사이에서 무작위 동적 설정!
+      let randomZDepth = 1.5 + (Math.random() * 3.5); 
+      document.getElementById('val-distance').innerText = randomZDepth.toFixed(1) + "m";
+      
+      let baseZ = camPos.z - randomZDepth; 
+
+      // 2. 거리가 가까워지면 시야 각도가 커지므로 X,Y 좌표 범위를 거리에 비례하여 보정해 이탈 방지
+      let distanceScaleFactor = randomZDepth / 3.5; 
+      let randX = camPos.x + (Math.random() - 0.5) * (randomRange * 2.2 * distanceScaleFactor);
+      let randY = camPos.y + (Math.random() - 0.5) * (randomRange * 1.6 * distanceScaleFactor); 
+
+      if (randY < camPos.y - 0.8) randY = camPos.y - 0.8;
+      if (randY > camPos.y + 1.1) randY = camPos.y + 1.1;
+
+      currentX = randX; currentY = randY; currentZ = baseZ;
+
+      // 3. 거리에 따른 크기 항상성(Size Constancy) 자동 보완 처리
+      // 멀리 가면 커지고 가까이 오면 작아져서 환자 망막에 맺히는 타겟 크기와 조준 편의성을 일정하게 빌드업
+      let finalRadius = 0.23 * distanceScaleFactor;
+      if(finalRadius < 0.12) finalRadius = 0.12; // 최소크기 마지노선 제한
+
+      const bLeft = document.getElementById('balloon-left');
+      const bRight = document.getElementById('balloon-right');
+      const coneLeft = document.getElementById('cone-left');
+      const coneRight = document.getElementById('cone-right');
+      const secureTrigger = document.getElementById('gaze-collision-trigger');
+
+      // 아이들의 지루함을 깨부수는 무작위 지오메트리 변형 선택 로직
+      let primitiveShape = "sphere";
+      let geoOptions = "";
+      if (isFeverMode) {
+        // 피버모드일 때는 모양이 현란하게 우주선/별 패턴으로 바뀜
+        const shapes = ["torus", "box", "cone", "sphere"];
+        primitiveShape = shapes[targetShapeIndex % shapes.length];
+        if(primitiveShape === "torus") geoOptions = `; radius: ${finalRadius * 0.8}; radiusTubular: 0.03;`;
+        else if(primitiveShape === "box") geoOptions = `; width: ${finalRadius*1.5}; height: ${finalRadius*1.5}; depth: ${finalRadius*1.5};`;
+        else if(primitiveShape === "cone") geoOptions = `; radiusBottom: ${finalRadius}; height: ${finalRadius*1.8};`;
+        else geoOptions = `; radius: ${finalRadius};`;
+      } else {
+        geoOptions = `; radius: ${finalRadius};`;
+      }
+
+      const cLeft = document.getElementById('left-eye-container');
+      const cRight = document.getElementById('right-eye-container');
+
+      if (activeTurn === "left") {
+        document.getElementById('active-eye-txt').innerText = "왼쪽눈 (빨강)";
+        document.getElementById('active-eye-txt').style.color = "#ff2a2a";
+        cLeft.setAttribute('visible', 'true'); cRight.setAttribute('visible', 'false');
+        
+        bLeft.setAttribute('geometry', `primitive: ${primitiveShape}${geoOptions}`);
+        bLeft.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+        
+        // 피버 보드 색상 가변화
+        bLeft.setAttribute('material', `color: ${isFeverMode ? '#ffff00' : '#ff2a2a'}; roughness: 0.15;`);
+        coneLeft.setAttribute('position', `0 ${-finalRadius * 1.1} 0`);
+        coneLeft.setAttribute('radius-bottom', `${finalRadius * 0.15}`);
+        coneLeft.setAttribute('height', `${finalRadius * 0.25}`);
+        coneLeft.setAttribute('visible', primitiveShape === "sphere" ? "true" : "false");
+      } 
+      else {
+        document.getElementById('active-eye-txt').innerText = "오른쪽눈 (초록)";
+        document.getElementById('active-eye-txt').style.color = "#10b981";
+        cLeft.setAttribute('visible', 'false'); cRight.setAttribute('visible', 'true');
+        
+        bRight.setAttribute('geometry', `primitive: ${primitiveShape}${geoOptions}`);
+        bRight.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+        
+        bRight.setAttribute('material', `color: ${isFeverMode ? '#00ffff' : '#10b981'}; roughness: 0.15;`);
+        coneRight.setAttribute('position', `0 ${-finalRadius * 1.1} 0`);
+        coneRight.setAttribute('radius-bottom', `${finalRadius * 0.15}`);
+        coneRight.setAttribute('height', `${finalRadius * 0.25}`);
+        coneRight.setAttribute('visible', primitiveShape === "sphere" ? "true" : "false");
+      }
+
+      // 4. 충돌 영역 감지 트리거 크기도 원근 거리에 맞춰 지능형 스케일 다운/업 연동 조절
+      if (secureTrigger) {
+        secureTrigger.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+        // 거리가 너무 가까우면 콜라이더가 지나치게 작아져서 조준이 안 되는 현상을 방지하기 위해 최소 트리거 반경 확보
+        let triggerRadius = 0.36 * distanceScaleFactor;
+        if(triggerRadius < 0.28) triggerRadius = 0.28; 
+        
+        secureTrigger.setAttribute('geometry', `primitive: sphere; radius: ${triggerRadius}`);
+        if (!isPopping && !secureTrigger.classList.contains('gaze-secure-trigger')) {
+          secureTrigger.classList.add('gaze-secure-trigger');
+        }
+      }
+    }
+
+    function setupVRHardwareLayers() {
+      const sceneEl = document.querySelector('a-scene');
+      sceneEl.addEventListener('enter-vr', () => {
+        const camera = sceneEl.camera;
+        if (camera && camera.isArrayCamera) {
+          camera.cameras[0].layers.enable(1); camera.cameras[0].layers.disable(2);
+          camera.cameras[1].layers.enable(2); camera.cameras[1].layers.disable(1);
+        }
+      });
+    }
+
+    function checkTargetGazeIntersection() {
+      requestAnimationFrame(checkTargetGazeIntersection);
+      if (!isTrainingActive || isPopping) return; 
+
+      const raycasterEl = document.getElementById('centerFixationRay');
+      if (!raycasterEl) return;
+
+      let raycasterComponent = raycasterEl.components.raycaster;
+      if (raycasterComponent && raycasterComponent.intersections && raycasterComponent.intersections.length > 0) {
+        const secureTrigger = document.getElementById('gaze-collision-trigger');
+        if (secureTrigger) { secureTrigger.classList.remove('gaze-secure-trigger'); }
+        isPopping = true; 
+        popTargetSuccess();
+      }
+    }
+
+    function popTargetSuccess() {
+      comboCount++;
+      targetShapeIndex++;
+      
+      // 5콤보 이상 달성 시 피버 모드 대폭발 발동
+      if (comboCount >= 5) {
+        if(!isFeverMode) {
+          isFeverMode = true;
+          document.getElementById('fever-indicator').style.display = 'block';
+          document.getElementById('score-board').style.borderColor = '#ff007f';
+          document.getElementById('score-board').style.color = '#ff007f';
+          drawBackgroundGrid(true); // 배경을 피버 네온 모드로 리셋
+        }
+        document.getElementById('combo-alert').innerText = `🔥 ${comboCount} COMBO!!`;
+        score += 2500; // 피버 점수 대폭 보너스 보상
+      } else {
+        document.getElementById('combo-alert').innerText = `👍 ${comboCount} 연속 콤보!`;
+        score += 1000;
+      }
+      
+      playPopSound(isFeverMode); 
+      document.getElementById('val-score').innerText = score.toString().padStart(4, '0');
+
+      // 피버모드일 때는 파티클 파편 잔상이 3배 더 많이 사방으로 비산함
+      triggerParticlesEmission(currentX, currentY, currentZ, isFeverMode ? 50 : 18);
+      activeTurn = (activeTurn === "left") ? "right" : "left";
+
+      if (bgMode === "pop-linked") {
+        currentDirectionSign *= -1;
+      }
+
+      document.getElementById('magic-eye-board').setAttribute('visible', 'false');
+
+      setTimeout(() => {
+        if (!isTrainingActive) return;
+        isPopping = false;
+        renderAlternatingTargets(); 
+        document.getElementById('magic-eye-board').setAttribute('visible', 'true'); 
+      }, 400); 
+    }
+
+    function animateBackground() {
+      requestAnimationFrame(animateBackground);
+      if (rotationSpeed > 0 && isTrainingActive) {
+        if (bgMode === "manual") {
+          const selectDir = document.getElementById('bg-direction-select').value;
+          currentDirectionSign = (selectDir === "left") ? -1 : 1;
+        }
+        // 피버 모드일 때는 배경 회전 속도에 가속도가 붙어 시야 주변 자극 가속화
+        let activeSpeed = isFeverMode ? rotationSpeed * 1.8 : rotationSpeed;
+        bgAngle += (activeSpeed * 0.005 * currentDirectionSign); 
+        const sky = document.getElementById('rotating-bg');
+        if (sky) sky.setAttribute('rotation', `0 ${bgAngle * 57.3} 0`);
+      }
+    }
+
+    function startBackgroundIntervalTimer() {
+      if (autoIntervalTimer) clearInterval(autoIntervalTimer);
+      if (bgMode === "auto-interval") {
+        autoIntervalTimer = setInterval(() => {
+          if (isTrainingActive) { currentDirectionSign *= -1; }
+        }, 7000);
+      }
+    }
+
+    function startElapsedClock() {
+      if (elapsedInterval) clearInterval(elapsedInterval);
+      totalSecondsElapsed = 0;
+      document.getElementById('status-txt').innerText = "재미있는 눈 오락실 가동 중";
+      
+      elapsedInterval = setInterval(() => {
+        if (!isTrainingActive) return;
+        totalSecondsElapsed++;
+        let min = Math.floor(totalSecondsElapsed / 60); let sec = totalSecondsElapsed % 60;
+        document.getElementById('val-time').innerText = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        if (totalSecondsElapsed >= targetSeconds) { clearInterval(elapsedInterval); playFanfareAndFinish(); }
+      }, 1000);
+    }
+
+    function playFanfareAndFinish() {
+      isTrainingActive = false;
+      if (autoIntervalTimer) clearInterval(autoIntervalTimer);
+      document.getElementById('magic-eye-board').setAttribute('visible', 'false');
+      document.getElementById('exit-vr-control').style.display = 'none';
+      
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50, 1318.51];
+      notes.forEach((freq, index) => {
+        setTimeout(() => {
+          const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+          osc.type = 'sine'; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+          gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+          osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+        }, index * 100);
+      });
+
+      setTimeout(() => {
+        const sceneEl = document.querySelector('a-scene');
+        if (sceneEl && sceneEl.is('vr-mode')) sceneEl.exitVR();
+        document.getElementById('modal-final-score').innerText = score;
+        document.getElementById('result-modal').style.display = 'block';
+      }, 1200);
+    }
+
+    // 오디오 피치 변경 주파수 콤보 매칭 커스텀 조율
+    function playPopSound(fever) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator(); const gainNode = audioCtx.createGain();
+      osc.type = fever ? 'triangle' : 'sine';
+      
+      // 콤보가 올라갈수록 효과음 고주파 매칭 (오락실 효과 극대화)
+      let baseFreq = fever ? 600 + (comboCount * 40) : 440 + (comboCount * 30);
+      if (baseFreq > 1500) baseFreq = 1500;
+
+      osc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime); 
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 2, audioCtx.currentTime + 0.12);
+      gainNode.gain.setValueAtTime(0.18, audioCtx.currentTime); gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+      osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+      osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    function triggerParticlesEmission(x, y, z, count) {
+      const pGroup = document.getElementById('particle-group');
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('a-box');
+        p.setAttribute('width', '0.03'); p.setAttribute('height', '0.03'); p.setAttribute('depth', '0.03');
+        
+        // 피버 모드일 때는 극단적으로 화려한 파티클 배색 제공
+        const colors = isFeverMode ? ['#ff00ff', '#ffff00', '#00ffff', '#ff007f'] : ['#ff0055', '#ffff00', '#00ffcc', '#38bdf8'];
+        p.setAttribute('color', colors[Math.floor(Math.random() * colors.length)]); p.setAttribute('position', `${x} ${y} ${z}`);
+        
+        const vx = (Math.random() - 0.5) * 4; const vy = (Math.random() - 0.5) * 4 + 1.5; const vz = (Math.random() - 0.5) * 4;
+        pGroup.appendChild(p);
+        let age = 0;
+        const t = setInterval(() => {
+          age += 16;
+          let cx = x + vx * (age/1000); let cy = y + vy * (age/1000) - (0.5 * 9.8 * (age/1000)*(age/1000)); let cz = z + vz * (age/1000);
+          p.setAttribute('position', `${cx} ${cy} ${cz}`);
+          if (age > 750) { clearInterval(t); if (p.parentNode) p.parentNode.removeChild(p); }
+        }, 16);
+      }
+    }
+
+    function exitVRModeManually() {
+      isTrainingActive = false; isPopping = false; comboCount = 0; isFeverMode = false;
+      drawBackgroundGrid(false);
+      if (autoIntervalTimer) clearInterval(autoIntervalTimer);
+      if (elapsedInterval) clearInterval(elapsedInterval);
+      document.getElementById('magic-eye-board').setAttribute('visible', 'false');
+      document.getElementById('control-panel').style.display = 'block';
+      document.getElementById('exit-vr-control').style.display = 'none';
+      document.getElementById('fever-indicator').style.display = 'none';
+      document.getElementById('score-board').style.borderColor = '#22c55e';
+      document.getElementById('score-board').style.color = '#22c55e';
+      document.getElementById('combo-alert').innerText = "";
+      const sceneEl = document.querySelector('a-scene');
+      if (sceneEl && sceneEl.is('vr-mode')) sceneEl.exitVR();
+    }
+
+    function startFusionTraining() {
+      isTrainingActive = true; isPopping = false; comboCount = 0; isFeverMode = false;
+      document.getElementById('combo-alert').innerText = "";
+      document.getElementById('fever-indicator').style.display = 'none';
+      document.getElementById('score-board').style.borderColor = '#22c55e';
+      document.getElementById('score-board').style.color = '#22c55e';
+      drawBackgroundGrid(false);
+
+      targetSeconds = parseInt(document.getElementById('training-time-select').value);
+      bgMode = document.getElementById('bg-mode-select').value;
+      rotationSpeed = parseInt(document.getElementById('bg-speed-slider').value);
+
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      document.getElementById('control-panel').style.display = 'none';
+      document.getElementById('exit-vr-control').style.display = 'block';
+      
+      activeTurn = "left"; 
+      document.getElementById('magic-eye-board').setAttribute('visible', 'true');
+      renderAlternatingTargets(); 
+      startElapsedClock();
+      startBackgroundIntervalTimer();
+      
+      const sceneEl = document.querySelector('a-scene');
+      if (sceneEl.hasLoaded) { sceneEl.enterVR(); } else { sceneEl.addEventListener('loaded', () => { sceneEl.enterVR(); }); }
+    }
+
+    setupVRHardwareLayers();
+    animateBackground();
+    requestAnimationFrame(checkTargetGazeIntersection);
+  </script>
+</body>
+</html>
