@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V26.0</title>
+  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V28.0</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
@@ -46,7 +46,7 @@
 
   <div id="control-panel">
     <div class="panel-header">
-      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V26.0</span></div>
+      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V28.0</span></div>
       
       <button id="start-btn" class="btn" onclick="startFusionTraining()">▶️ 시각자극 프로토콜 가동</button>
       
@@ -61,11 +61,11 @@
     </div>
 
     <div class="panel-scroll-body">
-      <div class="panel-group" style="background: rgba(34, 197, 94, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.4); margin-bottom: 10px;">
-        <span style="font-size: 10.5px; color: #22c55e; display: block; line-height: 1.4; font-weight: bold;">
-          ✅ [V26 물리 공간 엔진 패치 완료]<br>
-          - 혼자 터짐 원천 차단: 풍선이 카메라 종속성에서 완전히 벗어나 3D 세계에 독립적으로 배치됩니다.<br>
-          - 흰 원 복시 차단: 흰 원과 풍선의 거리가 언제나 완전 일치하여 융합이 편안해집니다.
+      <div class="panel-group" style="background: rgba(16, 185, 129, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4); margin-bottom: 10px;">
+        <span style="font-size: 10.5px; color: #10b981; display: block; line-height: 1.4; font-weight: bold;">
+          🎯 [V28 공간 연산 매커니즘 전면 전수술 완료]<br>
+          - 공간 완전 고정: 고개를 돌려도 풍선이 절대 따라오지 않고 우주에 고정됩니다.<br>
+          - 자동 폭발 차단: 정중앙에서 확연히 빗겨나 생성되므로, 고개를 직접 움직여 조준해야만 터집니다.
         </span>
       </div>
 
@@ -173,10 +173,11 @@
     <a-entity id="cameraRig">
       <a-entity id="mainCamera" camera look-controls position="0 1.6 0">
         
-        <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 50; interval: 15;" position="0 0 0"></a-entity>
+        <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 100; interval: 10;" position="0 0 0"></a-entity>
         
         <a-ring id="gaze-center-ring" radius-inner="0.018" radius-outer="0.025" color="#ffffff" position="0 0 -3.5" material="shader: flat; opacity: 0.9; depthTest: false;"></a-ring>
         
+        <a-entity id="camera-gaze-dummy" position="0 0 -1"></a-entity>
       </a-entity>
     </a-entity>
 
@@ -211,10 +212,9 @@
     let gazeHoldStartTime = null; const VISUAL_DWELL_REQUIRED = 800; let isGazeIntersecting = false;
     let elapsedInterval = null; let totalSecondsElapsed = 0;      
     let activeTurn = "left"; 
-    
-    // 풍선의 실시간 전역 위치를 추적하기 위한 변수
     let targetWorldPos = { x: 0, y: 1.6, z: -3.5 };
 
+    // 제어판 리스너들
     document.getElementById('bg-opacity-slider').addEventListener('input', (e) => {
       const opacityVal = parseInt(e.target.value) / 100;
       document.getElementById('bg-opacity-txt').innerText = e.target.value + "%";
@@ -265,12 +265,13 @@
       }
     }
 
-    // [V26.0 핵심 수술] 카메라에서 풍선을 떼어내어 전역 공간에 진짜 3D 좌표로 배치
+    // [★V28.0 철저한 공간 분리 및 오타 전수 수술 완료★]
     function rebuildTargetBalloon() {
       const globalSpace = document.getElementById('global-balloon-space');
       const cameraEl = document.getElementById('mainCamera');
+      const dummyEl = document.getElementById('camera-gaze-dummy');
       const gazeRing = document.getElementById('gaze-center-ring');
-      if (!globalSpace || !cameraEl || !gazeRing) return;
+      if (!globalSpace || !cameraEl || !dummyEl || !gazeRing) return;
       
       globalSpace.innerHTML = "";
       if (!isTrainingActive) return;
@@ -279,52 +280,53 @@
       if (mode === "left-only") activeTurn = "left";
       if (mode === "right-only") activeTurn = "right";
 
-      // 1. 카메라 현재 회전값 벡터 추출
-      const cameraObj = cameraEl.object3D;
-      let direction = new THREE.Vector3(0, 0, -1);
-      direction.applyQuarterion = cameraObj.quaternion; 
-      direction.transformDirection(cameraObj.parent.matrixWorld); // 월드 기준 정면 벡터 구하기
+      // 1. 내장 객체를 이용해 완벽한 월드 정면 벡터 계산 (오타 원천 차단)
+      let camWorldPos = new THREE.Vector3();
+      cameraEl.object3D.getWorldPosition(camWorldPos);
 
-      // 2. 가변 입체 깊이 인지 설정 (-2.8m ~ -4.5m)
-      let randomDistance = 2.8 + (Math.random() * 1.7);
+      let camWorldDir = new THREE.Vector3();
+      cameraEl.object3D.getWorldDirection(camWorldDir);
+      camWorldDir.negate(); // Three.js 특성상 정면은 역방향이므로 반전
+
+      // 2. 가변 초점 깊이 무작위 결정 (3.0m ~ 4.5m)
+      let randomDistance = 3.0 + (Math.random() * 1.5);
       
-      // [복시 제어 해결책] 흰 원 조준선의 초점 거리를 풍선의 거리와 소수점까지 일치화
+      // 흰색 원 조준선 깊이를 풍선과 완벽 동기화 (복시 차단)
       gazeRing.setAttribute('position', `0 0 ${-randomDistance + 0.05}`);
       let ringScale = randomDistance / 3.5;
       gazeRing.setAttribute('radius-inner', 0.018 * ringScale);
       gazeRing.setAttribute('radius-outer', 0.025 * ringScale);
 
-      // 3. [★혼자 터짐 절대 방지★] 정면 기준 상하좌우 완전히 비껴간 위치 계산
-      let rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraObj.quaternion);
-      let upVector = new THREE.Vector3(0, 1, 0).applyQuaternion(cameraObj.quaternion);
-      
-      // 사용자 시야각에 적절한 편차(Offset) 부여
-      let spreadX = (Math.random() - 0.5) * (randomDistance * 0.32);
-      let spreadY = (Math.random() - 0.5) * (randomDistance * 0.24);
+      // 3. 정면축 기준 상하좌우 완전 직교 벡터 추출
+      let rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraEl.object3D.quaternion);
+      let upVec = new THREE.Vector3(0, 1, 0).applyQuaternion(cameraEl.object3D.quaternion);
 
-      // 최종 물리 전역 세계의 3D 실좌표 연산 완료
-      targetWorldPos.x = cameraObj.position.x + (direction.x * randomDistance) + (rightVector.x * spreadX) + (upVector.x * spreadX);
-      targetWorldPos.y = cameraObj.position.y + (direction.y * randomDistance) + (rightVector.y * spreadY) + (upVector.y * spreadY);
-      targetWorldPos.z = cameraObj.position.z + (direction.z * randomDistance) + (rightVector.z * spreadX) + (upVector.z * spreadX);
+      // 주변시 영역에 확실히 배치되도록 상하좌우 편차 설정 (정중앙 폭발 완벽 차단)
+      let spreadX = (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.4);
+      let spreadY = (Math.random() > 0.5 ? 1 : -1) * (0.2 + Math.random() * 0.3);
+
+      // 4. 전역(우주) 공간 상의 절대 실좌표 완성
+      targetWorldPos.x = camWorldPos.x + (camWorldDir.x * randomDistance) + (rightVec.x * spreadX) + (upVec.x * spreadY);
+      targetWorldPos.y = camWorldPos.y + (camWorldDir.y * randomDistance) + (rightVec.y * spreadX) + (upVec.y * spreadY);
+      targetWorldPos.z = camWorldPos.z + (camWorldDir.z * randomDistance) + (rightVec.z * spreadX) + (upVec.z * spreadY);
 
       let userBaseMultiplier = parseFloat(document.getElementById('balloon-size-slider').value);
       let finalRadius = 0.16 * (randomDistance / 3.5) * userBaseMultiplier;
-      if(finalRadius < 0.07) finalRadius = 0.07;
+      if(finalRadius < 0.08) finalRadius = 0.08;
 
-      // 4. 독립된 전역 풍선 생성
+      // 5. 전역 3D 공간 레이어에 풍선 독립 객체 생성 고정
       const balloon = document.createElement('a-entity');
       balloon.setAttribute('class', 'gaze-secure-trigger');
       balloon.setAttribute('position', `${targetWorldPos.x} ${targetWorldPos.y} ${targetWorldPos.z}`);
       
       if (activeTurn === "left") {
         balloon.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
-        balloon.setAttribute('material', 'color: #10b981; roughness: 0.2; metalness: 0.1;');
+        balloon.setAttribute('material', 'color: #10b981; roughness: 0.1; metalness: 0.1;');
         const badge = document.getElementById('mode-status-badge');
         if (mode === "mfbf") { badge.innerText = "🔵 MFBF (현재 타겟: 좌안 🟢)"; badge.style.color = "#10b981"; }
       } else {
-        // 우안 타겟: 빨간색 단일 풍선 강제 매칭 고정
         balloon.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
-        balloon.setAttribute('material', 'color: #ff2a2a; roughness: 0.2; metalness: 0.1;');
+        balloon.setAttribute('material', 'color: #ff2a2a; roughness: 0.1; metalness: 0.1;');
         const badge = document.getElementById('mode-status-badge');
         if (mode === "mfbf") { badge.innerText = "🔵 MFBF (현재 타겟: 우안 🔴)"; badge.style.color = "#ff2a2a"; }
       }
@@ -337,7 +339,7 @@
       rebuildTargetBalloon();
     }
 
-    // 진정한 시선 정렬 검사 루프
+    // 정밀 조준 레이캐스터 조율 루프
     function checkTargetGazeIntersection() {
       requestAnimationFrame(checkTargetGazeIntersection);
       if (!isTrainingActive || isPopping) return; 
@@ -346,7 +348,7 @@
       if (!raycasterEl) return;
       let raycasterComponent = raycasterEl.components.raycaster;
       
-      // 조준선 중심에 물리적으로 전역 풍선이 들어왔을 때만 카운트 시작됨
+      // 사용자가 고개를 진짜 움직여 조준선 안에 전역 풍선을 가두었을 때만 트리거 작동
       if (raycasterComponent && raycasterComponent.intersections && raycasterComponent.intersections.length > 0) {
         if (!isGazeIntersecting) {
           isGazeIntersecting = true; gazeHoldStartTime = performance.now(); 
@@ -364,8 +366,7 @@
       successCount++; playPopSound(); 
       document.getElementById('val-success-count').innerText = successCount;
       
-      // 터진 위치에 정확히 파티클 생성
-      triggerParticlesEmission(targetWorldPos.x, targetWorldPos.y, targetWorldPos.z, 12);
+      triggerParticlesEmission(targetWorldPos.x, targetWorldPos.y, targetWorldPos.z, 15);
       
       const clinicalMode = document.getElementById('clinical-mode-select').value;
       if (clinicalMode === "mfbf") activeTurn = (activeTurn === "left") ? "right" : "left";
