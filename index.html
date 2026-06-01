@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V22.0</title>
+  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V23.0</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
@@ -54,9 +54,9 @@
   </style>
 
   <script>
-    // [V22.0 핵심] A-Frame 순정 확장: 물체의 VR 하드웨어 좌우 레이어를 강제 스위칭하는 컴포넌트 등록
+    // A-Frame 하드웨어 좌우 레이어 매핑 컴포넌트
     AFRAME.registerComponent('vr-eye-isolator', {
-      schema: { eye: {type: 'string', default: 'both'} }, // 'left', 'right', 'both'
+      schema: { eye: {type: 'string', default: 'both'} },
       update: function () {
         const el = this.el;
         const eyeMode = this.data.eye;
@@ -64,18 +64,16 @@
         el.addEventListener('object3dset', function() {
           const mesh = el.getObject3D('mesh');
           if (!mesh) return;
-
-          // Three.js 기본 레이어 마스크 초기화 (0번은 공통 레이어)
           mesh.layers.sets([0]); 
 
           if (eyeMode === 'left') {
-            mesh.layers.enable(1);  // VR 모드 진입 시 오직 왼쪽 눈 카메라마냥 격리 매핑
-            mesh.layers.disable(0); // 공통 레이어 차단 (우안 노출 차단)
+            mesh.layers.enable(1);  
+            mesh.layers.disable(0); 
           } else if (eyeMode === 'right') {
-            mesh.layers.enable(2);  // VR 모드 진입 시 오직 오른쪽 눈 카메라마냥 격리 매핑
-            mesh.layers.disable(0); // 공통 레이어 차단 (좌안 노출 차단)
+            mesh.layers.enable(2);  
+            mesh.layers.disable(0); 
           } else {
-            mesh.layers.enable(0);  // 양안 융합용 공통 상태
+            mesh.layers.enable(0);  
           }
         });
       }
@@ -84,10 +82,9 @@
 </head>
 <body>
 
-  <!-- 제어판 -->
   <div id="control-panel">
     <div class="panel-header">
-      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V22.0</span></div>
+      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V23.0</span></div>
       
       <button id="start-btn" class="btn" onclick="startFusionTraining()">▶️ 시각자극 프로토콜 가동 (VR)</button>
       
@@ -101,12 +98,11 @@
       </div>
     </div>
 
-    <!-- 바디부: 기타 미세 설정 컴포넌트 -->
     <div class="panel-scroll-body">
-      <div class="panel-group" style="background: rgba(59, 130, 246, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.4); margin-bottom: 10px;">
-        <span style="font-size: 10.5px; color: #38bdf8; display: block; line-height: 1.4; font-weight: bold;">
-          🛡️ 하드웨어 레이어 격리 시스템(V22) 적용 완료.<br>
-          이제 VR 헤드셋 안에서 좌우안 단안 차폐가 100% 완벽하게 물리 분리되어 보입니다.
+      <div class="panel-group" style="background: rgba(16, 185, 129, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.4); margin-bottom: 10px;">
+        <span style="font-size: 10.5px; color: #10b981; display: block; line-height: 1.4; font-weight: bold;">
+          🎯 시선 축(흰색 원)과 풍선 정렬 완료.<br>
+          버그를 유발하던 초록색 임시 충돌 구체를 완전히 제거하고 풍선 자체에 조준 트리거를 이식했습니다.
         </span>
       </div>
 
@@ -176,7 +172,6 @@
     </div>
   </div>
 
-  <!-- 우측 상태창 -->
   <div id="score-board">
     <div class="score-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
       <span class="score-label" style="color: #ef4444;">⏱️ 시간경과</span>
@@ -193,7 +188,6 @@
     <div class="center-branding">한국시기능훈련센터 성서계명대점</div>
   </div>
 
-  <!-- 결과 모달 -->
   <div id="result-modal">
     <h1>📊 시각자극 훈련 프로토콜 완료 📊</h1>
     <p style="color: #aaa; margin: 0;">성서계명대점 평가 데이터</p>
@@ -201,42 +195,30 @@
     <button class="reset-btn" onclick="location.reload()">처음으로 복귀</button>
   </div>
 
-  <!-- VR 공간 정의 -->
   <a-scene background="color: #000000" vr-mode-ui="enabled: true">
     <a-assets>
       <canvas id="bgCheckerCanvas" width="512" height="512"></canvas>
     </a-assets>
 
-    <!-- 배경 격자 (기본 0번 레이어로 양안 공통 노출) -->
     <a-sky id="rotating-bg" src="#bgCheckerCanvas" radius="50" material="shader: flat; repeat: 16 16; side: back; opacity: 1.0;"></a-sky>
 
-    <!-- 고정 융합 보조선 가이드 (0번 레이어 양안 공통) -->
     <a-entity id="fusion-anchor-lines" position="0 1.6 -4" visible="true">
       <a-grid width="8" height="8" thickness="0.015" color="#3b82f6" material="opacity: 0.25; shader: flat; depthTest: false;"></a-grid>
       <a-ring radius-inner="0.3" radius-outer="0.31" color="#22c55e" material="opacity: 0.3; shader: flat; depthTest: false;"></a-ring>
     </a-entity>
 
-    <!-- 카메라 및 고정 시선 조준선 -->
     <a-entity id="cameraRig">
       <a-entity id="mainCamera" camera look-controls position="0 1.6 0">
-        <!-- 정중앙 고정 레이캐스터 조준축 -->
         <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 100; interval: 10;" position="0 0 0" rotation="0 0 0"></a-entity>
         
-        <!-- 시선 원 벌어짐 방지 단일 링 (0번 레이어로 양안 정중앙에 선명히 일치) -->
         <a-ring id="gaze-center-ring" radius-inner="0.018" radius-outer="0.025" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.9; depthTest: false;"></a-ring>
       </a-entity>
     </a-entity>
 
-    <!-- 시표 레이어 (vr-eye-isolator 컴포넌트를 이식하여 물리 차폐) -->
     <a-entity id="magic-eye-board">
-      <!-- 왼쪽 눈 주시용 (적색 구체 -> vr-eye-isolator="eye: left") -->
-      <a-entity id="balloon-left" vr-eye-isolator="eye: left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.2; metalness: 0.1;"></a-entity>
+      <a-entity id="balloon-left" class="gaze-secure-trigger" vr-eye-isolator="eye: left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.2; metalness: 0.1;"></a-entity>
       
-      <!-- 오른쪽 눈 주시용 (녹색 구체 -> vr-eye-isolator="eye: right") -->
-      <a-entity id="balloon-right" vr-eye-isolator="eye: right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.2; metalness: 0.1;"></a-entity>
-      
-      <!-- 충돌 트리거 (레이캐스터 감지용, 보이지 않으며 무조건 조준 일치를 위해 양안 오픈 레이어 유지) -->
-      <a-entity id="gaze-collision-trigger" class="gaze-secure-trigger" geometry="primitive: sphere;" material="visible: false;"></a-entity>
+      <a-entity id="balloon-right" class="gaze-secure-trigger" vr-eye-isolator="eye: right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.2; metalness: 0.1;"></a-entity>
     </a-entity>
 
     <a-entity id="particle-group"></a-entity>
@@ -261,7 +243,7 @@
       if(sky && sky.object3DMap.mesh) sky.object3DMap.mesh.material.map.needsUpdate = true;
     }
 
-    let audioCtx = null; let successCount = 0; let randomRange = 1.20; 
+    let audioCtx = null; let successCount = 0; 
     let baseSpeedParam = 3; let isTrainingActive = false; let isPopping = false; 
     let bgOffsetX = 0; let bgOffsetY = 0; let bgAngle = 0;
     const PROTOCOL_STAGES = ["right", "left", "up", "down", "cw", "ccw"];
@@ -322,13 +304,10 @@
       }
     }
 
-    // [V22.0 개정] 가시성 켜고 끄기 뿐만 아니라, 하드웨어 레이어 분리 컴포넌트 데이터까지 직접 주입
     function updateTargetVisibilityAndSizes() {
       let userBaseMultiplier = parseFloat(document.getElementById('balloon-size-slider').value);
-      
       const bLeft = document.getElementById('balloon-left');
       const bRight = document.getElementById('balloon-right');
-      const secureTrigger = document.getElementById('gaze-collision-trigger');
 
       const mode = document.getElementById('clinical-mode-select').value;
       if (mode === "left-only") activeTurn = "left";
@@ -341,37 +320,30 @@
         if(bLeft) { bLeft.setAttribute('visible', 'false'); }
         if(bRight) { bRight.setAttribute('visible', 'true'); bRight.setAttribute('vr-eye-isolator', 'eye: right'); }
       }
-
-      if (secureTrigger) secureTrigger.setAttribute('geometry', `primitive: sphere; radius: ${0.32 * userBaseMultiplier}`);
     }
 
+    // [V23.0 정렬 매커니즘] 시표를 카메라 정중앙 축선에 완벽 결합
     function renderAlternatingTargets() {
       if (!isTrainingActive) return;
 
       const cameraEl = document.getElementById('mainCamera');
       let camPos = {x: 0, y: 1.6, z: 0};
-      if (cameraEl && cameraEl.object3D) {
-        camPos.x = cameraEl.object3D.position.x; camPos.y = cameraEl.object3D.position.y; camPos.z = cameraEl.object3D.position.z;
-      }
-
-      let randomZDepth = 2.0 + (Math.random() * 2.5); 
-      let baseZ = camPos.z - randomZDepth; 
-      let distanceScaleFactor = randomZDepth / 3.5; 
-      let randX = camPos.x + (Math.random() - 0.5) * (randomRange * 2.0 * distanceScaleFactor);
-      let randY = camPos.y + (Math.random() - 0.5) * (randomRange * 1.2 * distanceScaleFactor); 
-
-      if (randY < camPos.y - 0.6) randY = camPos.y - 0.6;
-      if (randY > camPos.y + 0.9) randY = camPos.y + 0.9;
-
-      currentX = randX; currentY = randY; currentZ = baseZ;
+      
+      // 임상 정상화: 풍선 깊이(Z축 거리)를 2.5m ~ 4.5m 사이 무작위로 주어 조절 조도 유도
+      let randomZDepth = 2.5 + (Math.random() * 2.0); 
+      
+      // 시선 축 정렬: 풍선은 언제나 카메라가 가리키는 정중앙(0, 0) 연장선 상에 위치시킴
+      currentX = 0; 
+      currentY = 0; 
+      currentZ = -randomZDepth; 
 
       let userBaseMultiplier = parseFloat(document.getElementById('balloon-size-slider').value);
-      let finalRadius = 0.20 * distanceScaleFactor * userBaseMultiplier;
+      // 거리에 비례하여 물리 크기를 동적 스케일링 (시야각을 선명하게 유지하기 위함)
+      let finalRadius = 0.18 * (randomZDepth / 3.5) * userBaseMultiplier;
       if(finalRadius < 0.08) finalRadius = 0.08;
 
       const bLeft = document.getElementById('balloon-left');
       const bRight = document.getElementById('balloon-right');
-      const secureTrigger = document.getElementById('gaze-collision-trigger');
 
       const clinicalMode = document.getElementById('clinical-mode-select').value;
       if (clinicalMode === "left-only") activeTurn = "left"; 
@@ -383,31 +355,25 @@
         badge.style.color = (activeTurn === "left") ? "#ff2a2a" : "#10b981";
       }
 
-      // [V22.0 주입] 좌표 이동 시 오브젝트의 격리 속성(vr-eye-isolator) 재확정
+      // 카메라 조준축 바로 하위에 고정하기 위해 조준선 링과 동일하게 정중앙축(0 0 -Depth) 정렬
       if (activeTurn === "left") {
         if(bLeft) {
           bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
-          bLeft.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+          bLeft.setAttribute('position', `${currentX} ${currentY} ${currentZ}`);
           bLeft.setAttribute('vr-eye-isolator', 'eye: left');
           bLeft.setAttribute('visible', 'true');
+          if(!bLeft.classList.contains('gaze-secure-trigger')) bLeft.classList.add('gaze-secure-trigger');
         }
-        if(bRight) bRight.setAttribute('visible', 'false');
+        if(bRight) { bRight.setAttribute('visible', 'false'); bRight.classList.remove('gaze-secure-trigger'); }
       } else {
         if(bRight) {
           bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
-          bRight.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+          bRight.setAttribute('position', `${currentX} ${currentY} ${currentZ}`);
           bRight.setAttribute('vr-eye-isolator', 'eye: right');
           bRight.setAttribute('visible', 'true');
+          if(!bRight.classList.contains('gaze-secure-trigger')) bRight.classList.add('gaze-secure-trigger');
         }
-        if(bLeft) bLeft.setAttribute('visible', 'false');
-      }
-
-      if (secureTrigger) {
-        secureTrigger.setAttribute('position', `${randX} ${randY} ${baseZ}`);
-        let triggerRadius = 0.32 * distanceScaleFactor * userBaseMultiplier;
-        if(triggerRadius < 0.22) triggerRadius = 0.22;
-        secureTrigger.setAttribute('geometry', `primitive: sphere; radius: ${triggerRadius}`);
-        if (!secureTrigger.classList.contains('gaze-secure-trigger')) secureTrigger.classList.add('gaze-secure-trigger');
+        if(bLeft) { bLeft.setAttribute('visible', 'false'); bLeft.classList.remove('gaze-secure-trigger'); }
       }
 
       isGazeIntersecting = false; gazeHoldStartTime = null;
@@ -426,8 +392,6 @@
           isGazeIntersecting = true; gazeHoldStartTime = performance.now(); 
         } else {
           if (performance.now() - gazeHoldStartTime >= VISUAL_DWELL_REQUIRED) {
-            const secureTrigger = document.getElementById('gaze-collision-trigger');
-            if (secureTrigger) secureTrigger.classList.remove('gaze-secure-trigger');
             isPopping = true; popTargetSuccess();
           }
         }
@@ -439,7 +403,9 @@
     function popTargetSuccess() {
       successCount++; playPopSound(); 
       document.getElementById('val-success-count').innerText = successCount;
-      triggerParticlesEmission(currentX, currentY, currentZ, 12);
+      
+      // 파티클 좌표 계산 (카메라 기준 로컬 매핑을 반영한 절대 좌표 추정치)
+      triggerParticlesEmission(0, 1.6, currentZ, 12);
       
       const clinicalMode = document.getElementById('clinical-mode-select').value;
       if (clinicalMode === "mfbf") activeTurn = (activeTurn === "left") ? "right" : "left";
@@ -542,10 +508,11 @@
       document.getElementById('magic-eye-board').setAttribute('visible', 'true');
       document.getElementById('control-panel').style.display = 'flex';
       document.getElementById('exit-vr-control').style.display = 'none';
-      document.getElementById('balloon-left').setAttribute('position', '0 1.6 -3.5');
-      document.getElementById('balloon-right').setAttribute('position', '0 1.6 -3.5');
-      const secureTrigger = document.getElementById('gaze-collision-trigger');
-      if(secureTrigger) secureTrigger.setAttribute('position', '0 1.6 -3.5');
+      
+      // 메인 카메라 축 내부 고정을 위한 리셋값 변경
+      document.getElementById('balloon-left').setAttribute('position', '0 0 -3.5');
+      document.getElementById('balloon-right').setAttribute('position', '0 0 -3.5');
+      
       updateClinicalBadgePreview(); updateTargetVisibilityAndSizes();
       const sceneEl = document.querySelector('a-scene'); if (sceneEl && sceneEl.is('vr-mode')) sceneEl.exitVR();
     }
@@ -565,10 +532,9 @@
       if (sceneEl.hasLoaded) { sceneEl.enterVR(); } else { sceneEl.addEventListener('loaded', () => { sceneEl.enterVR(); }); }
     }
 
-    document.getElementById('balloon-left').setAttribute('position', '0 1.6 -3.5');
-    document.getElementById('balloon-right').setAttribute('position', '0 1.6 -3.5');
-    const secureTrigger = document.getElementById('gaze-collision-trigger');
-    if(secureTrigger) secureTrigger.setAttribute('position', '0 1.6 -3.5');
+    // 초기 빌드 시 시표 레이어를 메인 카메라 하위 좌표계 형식(0 0 -3.5)에 고정
+    document.getElementById('balloon-left').setAttribute('position', '0 0 -3.5');
+    document.getElementById('balloon-right').setAttribute('position', '0 0 -3.5');
 
     drawBackgroundGrid();
     updateClinicalBadgePreview();
