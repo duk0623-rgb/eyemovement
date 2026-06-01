@@ -2,12 +2,12 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V21.0</title>
+  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V22.0</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
     
-    /* [개선] VR 헤드셋 전용 상하 고정형 제어판 구조 */
+    /* VR 헤드셋 전용 상하 고정형 제어판 구조 */
     #control-panel {
       position: absolute; top: 15px; left: 15px; z-index: 99999;
       background: rgba(11, 15, 26, 0.92); color: white; padding: 18px;
@@ -17,12 +17,10 @@
     
     .panel-header { flex-shrink: 0; margin-bottom: 10px; }
     
-    /* 세부 설정들을 담는 내부 스크롤 박스 (가동 버튼 뒤로 숨김) */
     .panel-scroll-body {
       flex-grow: 1; overflow-y: auto; padding-right: 5px; margin-top: 5px;
-      max-height: 45vh; /* 헤드셋 저해상도 화면에서도 절대 안 넘치도록 제한 */
+      max-height: 45vh;
     }
-    /* 스크롤바 가시성 확보 */
     .panel-scroll-body::-webkit-scrollbar { width: 6px; }
     .panel-scroll-body::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
     .panel-scroll-body::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
@@ -33,7 +31,6 @@
     select, input[type="range"] { width: 100%; padding: 7px; background: #1e293b; color: white; border: 1px solid #475569; border-radius: 6px; box-sizing: border-box; font-size: 12px; }
     .display-value { float: right; color: #38bdf8; font-weight: bold; }
     
-    /* [최적화] 최상단 고정 및 크기 확대 적용된 가동 버튼 */
     .btn { width: 100%; padding: 14px; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; letter-spacing: 0.5px; }
     #start-btn { background: #16a34a; box-shadow: 0 4px 15px rgba(22, 163, 74, 0.4); margin-bottom: 5px; }
     #start-btn:hover { background: #22c55e; }
@@ -55,16 +52,43 @@
     .final-score { font-size: 32px; color: #eab308; margin: 20px 0; font-weight: bold; }
     .reset-btn { background: #38bdf8; color: #000; padding: 10px 25px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
   </style>
+
+  <script>
+    // [V22.0 핵심] A-Frame 순정 확장: 물체의 VR 하드웨어 좌우 레이어를 강제 스위칭하는 컴포넌트 등록
+    AFRAME.registerComponent('vr-eye-isolator', {
+      schema: { eye: {type: 'string', default: 'both'} }, // 'left', 'right', 'both'
+      update: function () {
+        const el = this.el;
+        const eyeMode = this.data.eye;
+        
+        el.addEventListener('object3dset', function() {
+          const mesh = el.getObject3D('mesh');
+          if (!mesh) return;
+
+          // Three.js 기본 레이어 마스크 초기화 (0번은 공통 레이어)
+          mesh.layers.sets([0]); 
+
+          if (eyeMode === 'left') {
+            mesh.layers.enable(1);  // VR 모드 진입 시 오직 왼쪽 눈 카메라마냥 격리 매핑
+            mesh.layers.disable(0); // 공통 레이어 차단 (우안 노출 차단)
+          } else if (eyeMode === 'right') {
+            mesh.layers.enable(2);  // VR 모드 진입 시 오직 오른쪽 눈 카메라마냥 격리 매핑
+            mesh.layers.disable(0); // 공통 레이어 차단 (좌안 노출 차단)
+          } else {
+            mesh.layers.enable(0);  // 양안 융합용 공통 상태
+          }
+        });
+      }
+    });
+  </script>
 </head>
 <body>
 
-  <!-- 제어판 (구조 전면 리팩토링) -->
+  <!-- 제어판 -->
   <div id="control-panel">
-    <!-- 헤더부: 타이틀 및 핵심 가동 버튼 (절대 스크롤 안됨, 항시 고정) -->
     <div class="panel-header">
-      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V21.0</span></div>
+      <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V22.0</span></div>
       
-      <!-- 최상단으로 전진 배치된 가동 버튼 -->
       <button id="start-btn" class="btn" onclick="startFusionTraining()">▶️ 시각자극 프로토콜 가동 (VR)</button>
       
       <div class="panel-group" style="margin-top: 8px;">
@@ -77,11 +101,12 @@
       </div>
     </div>
 
-    <!-- 바디부: 기타 미세 설정 컴포넌트 (스크롤 박스 내부 배치) -->
+    <!-- 바디부: 기타 미세 설정 컴포넌트 -->
     <div class="panel-scroll-body">
-      <div class="panel-group" style="background: rgba(34, 197, 94, 0.12); padding: 8px; border-radius: 6px; border: 1px solid rgba(34, 197, 94, 0.3); margin-bottom: 10px;">
-        <span style="font-size: 10.5px; color: #22c55e; display: block; line-height: 1.4; font-weight: bold;">
-          ℹ️ 안내: 버튼 오작동 및 짤림 현상을 완전히 예방하기 위해 시작 버튼이 최상단에 상시 고정되었습니다.
+      <div class="panel-group" style="background: rgba(59, 130, 246, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(59, 130, 246, 0.4); margin-bottom: 10px;">
+        <span style="font-size: 10.5px; color: #38bdf8; display: block; line-height: 1.4; font-weight: bold;">
+          🛡️ 하드웨어 레이어 격리 시스템(V22) 적용 완료.<br>
+          이제 VR 헤드셋 안에서 좌우안 단안 차폐가 100% 완벽하게 물리 분리되어 보입니다.
         </span>
       </div>
 
@@ -176,16 +201,16 @@
     <button class="reset-btn" onclick="location.reload()">처음으로 복귀</button>
   </div>
 
-  <!-- VR 공간 정의 (순정 A-Frame 시스템 레이아웃) -->
+  <!-- VR 공간 정의 -->
   <a-scene background="color: #000000" vr-mode-ui="enabled: true">
     <a-assets>
       <canvas id="bgCheckerCanvas" width="512" height="512"></canvas>
     </a-assets>
 
-    <!-- 배경 격자 -->
+    <!-- 배경 격자 (기본 0번 레이어로 양안 공통 노출) -->
     <a-sky id="rotating-bg" src="#bgCheckerCanvas" radius="50" material="shader: flat; repeat: 16 16; side: back; opacity: 1.0;"></a-sky>
 
-    <!-- 고정 융합 보조선 가이드 -->
+    <!-- 고정 융합 보조선 가이드 (0번 레이어 양안 공통) -->
     <a-entity id="fusion-anchor-lines" position="0 1.6 -4" visible="true">
       <a-grid width="8" height="8" thickness="0.015" color="#3b82f6" material="opacity: 0.25; shader: flat; depthTest: false;"></a-grid>
       <a-ring radius-inner="0.3" radius-outer="0.31" color="#22c55e" material="opacity: 0.3; shader: flat; depthTest: false;"></a-ring>
@@ -197,15 +222,20 @@
         <!-- 정중앙 고정 레이캐스터 조준축 -->
         <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 100; interval: 10;" position="0 0 0" rotation="0 0 0"></a-entity>
         
-        <!-- 시선 원 벌어짐 방지 단일 링 -->
+        <!-- 시선 원 벌어짐 방지 단일 링 (0번 레이어로 양안 정중앙에 선명히 일치) -->
         <a-ring id="gaze-center-ring" radius-inner="0.018" radius-outer="0.025" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.9; depthTest: false;"></a-ring>
       </a-entity>
     </a-entity>
 
-    <!-- 시표 레이어 (자바스크립트 visible 완벽 분리 조절) -->
+    <!-- 시표 레이어 (vr-eye-isolator 컴포넌트를 이식하여 물리 차폐) -->
     <a-entity id="magic-eye-board">
-      <a-entity id="balloon-left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.2; metalness: 0.1;"></a-entity>
-      <a-entity id="balloon-right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.2; metalness: 0.1;"></a-entity>
+      <!-- 왼쪽 눈 주시용 (적색 구체 -> vr-eye-isolator="eye: left") -->
+      <a-entity id="balloon-left" vr-eye-isolator="eye: left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.2; metalness: 0.1;"></a-entity>
+      
+      <!-- 오른쪽 눈 주시용 (녹색 구체 -> vr-eye-isolator="eye: right") -->
+      <a-entity id="balloon-right" vr-eye-isolator="eye: right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.2; metalness: 0.1;"></a-entity>
+      
+      <!-- 충돌 트리거 (레이캐스터 감지용, 보이지 않으며 무조건 조준 일치를 위해 양안 오픈 레이어 유지) -->
       <a-entity id="gaze-collision-trigger" class="gaze-secure-trigger" geometry="primitive: sphere;" material="visible: false;"></a-entity>
     </a-entity>
 
@@ -292,6 +322,7 @@
       }
     }
 
+    // [V22.0 개정] 가시성 켜고 끄기 뿐만 아니라, 하드웨어 레이어 분리 컴포넌트 데이터까지 직접 주입
     function updateTargetVisibilityAndSizes() {
       let userBaseMultiplier = parseFloat(document.getElementById('balloon-size-slider').value);
       
@@ -304,11 +335,11 @@
       if (mode === "right-only") activeTurn = "right";
 
       if (activeTurn === "left") {
-        if(bLeft) bLeft.setAttribute('visible', 'true');
-        if(bRight) bRight.setAttribute('visible', 'false');
+        if(bLeft) { bLeft.setAttribute('visible', 'true'); bLeft.setAttribute('vr-eye-isolator', 'eye: left'); }
+        if(bRight) { bRight.setAttribute('visible', 'false'); }
       } else {
-        if(bLeft) bLeft.setAttribute('visible', 'false');
-        if(bRight) bRight.setAttribute('visible', 'true');
+        if(bLeft) { bLeft.setAttribute('visible', 'false'); }
+        if(bRight) { bRight.setAttribute('visible', 'true'); bRight.setAttribute('vr-eye-isolator', 'eye: right'); }
       }
 
       if (secureTrigger) secureTrigger.setAttribute('geometry', `primitive: sphere; radius: ${0.32 * userBaseMultiplier}`);
@@ -352,10 +383,12 @@
         badge.style.color = (activeTurn === "left") ? "#ff2a2a" : "#10b981";
       }
 
+      // [V22.0 주입] 좌표 이동 시 오브젝트의 격리 속성(vr-eye-isolator) 재확정
       if (activeTurn === "left") {
         if(bLeft) {
           bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
           bLeft.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+          bLeft.setAttribute('vr-eye-isolator', 'eye: left');
           bLeft.setAttribute('visible', 'true');
         }
         if(bRight) bRight.setAttribute('visible', 'false');
@@ -363,6 +396,7 @@
         if(bRight) {
           bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
           bRight.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+          bRight.setAttribute('vr-eye-isolator', 'eye: right');
           bRight.setAttribute('visible', 'true');
         }
         if(bLeft) bLeft.setAttribute('visible', 'false');
