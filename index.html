@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V18.7</title>
+  <title>VR 단안·MFBF 통합형 시각격자 자극 시스템 V18.8</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Malgun Gothic', sans-serif; user-select: none; }
@@ -39,12 +39,40 @@
     .final-score { font-size: 32px; color: #eab308; margin: 20px 0; font-weight: bold; }
     .reset-btn { background: #38bdf8; color: #000; padding: 10px 25px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; }
   </style>
+  <script>
+    // [핵심 변경] VR 헤드셋 내에서 좌우안 시각 자극을 물리적으로 완벽 분리하는 컴포넌트 등록
+    AFRAME.registerComponent('eye-layer', {
+      schema: { type: 'string', default: 'both' },
+      init: function () {
+        this.el.addEventListener('model-loaded', this.updateLayer.bind(this));
+        this.updateLayer();
+      },
+      update: function () {
+        this.updateLayer();
+      },
+      updateLayer: function () {
+        const mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+        
+        // WebXR 기준: 0은 양안 공통, 1은 좌안(Left), 2는 우안(Right) 레이어 마스크
+        mesh.layers.disableAll();
+        if (this.data === 'left') {
+          mesh.layers.enable(1);
+        } else if (this.data === 'right') {
+          mesh.layers.enable(2);
+        } else {
+          mesh.layers.enable(0);
+          mesh.layers.enable(1);
+          mesh.layers.enable(2);
+        }
+      }
+    });
+  </script>
 </head>
 <body>
 
-  <!-- 제어판 -->
   <div id="control-panel">
-    <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V18.7</span></div>
+    <div class="panel-title">한국시기능훈련센터 성서계명대점<br><span style="font-size:11px; color:#aaa; font-weight:normal;">시기능 자극 시스템 설정 V18.8</span></div>
     
     <div class="panel-group">
       <label>👁️ 임상 대상안 프로토콜 선택</label>
@@ -57,8 +85,8 @@
 
     <div class="panel-group" style="background: rgba(168, 85, 247, 0.15); padding: 8px; border-radius: 6px; border: 1px solid rgba(168, 85, 247, 0.4);">
       <span style="font-size: 11px; color: #c084fc; font-weight: bold; display: block; line-height: 1.4;">
-        🚀 사시·복시 방지 특화 프로토콜 활성화됨<br>
-        (풍선이 나타난 눈의 시선 조준 원은 복시 방지를 위해 자동으로 소거됩니다.)
+        🚀 VR 헤드셋 전용 레이어 프로토콜 적용됨<br>
+        (초록 테두리 잔상 소거 및 시선원 복시 완전 방지)
       </span>
     </div>
 
@@ -129,7 +157,6 @@
     <button id="start-btn" class="btn" onclick="startFusionTraining()">▶️ 시각자극 프로토콜 가동 (VR)</button>
   </div>
 
-  <!-- 우측 상태창 -->
   <div id="score-board">
     <div class="score-row" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
       <span class="score-label" style="color: #ef4444;">⏱️ 시간경과</span>
@@ -146,7 +173,6 @@
     <div class="center-branding">한국시기능훈련센터 성서계명대점</div>
   </div>
 
-  <!-- 결과 모달 -->
   <div id="result-modal">
     <h1>📊 시각자극 훈련 프로토콜 완료 📊</h1>
     <p style="color: #aaa; margin: 0;">성서계명대점 평가 데이터</p>
@@ -154,47 +180,34 @@
     <button class="reset-btn" onclick="location.reload()">처음으로 복귀</button>
   </div>
 
-  <!-- VR 공간 정의 -->
   <a-scene background="color: #000000" vr-mode-ui="enabled: true">
     <a-assets>
       <canvas id="bgCheckerCanvas" width="512" height="512"></canvas>
     </a-assets>
 
-    <a-sky id="rotating-bg" src="#bgCheckerCanvas" radius="50" material="shader: flat; repeat: 16 16; side: back; opacity: 1.0;"></a-sky>
+    <a-sky id="rotating-bg" src="#bgCheckerCanvas" radius="50" material="shader: flat; repeat: 16 16; side: back; opacity: 1.0;" eye-layer="both"></a-sky>
 
-    <!-- 고정 융합 보조선 -->
-    <a-entity id="fusion-anchor-lines" position="0 1.6 -4" visible="true">
+    <a-entity id="fusion-anchor-lines" position="0 1.6 -4" visible="true" eye-layer="both">
       <a-grid width="8" height="8" thickness="0.015" color="#3b82f6" material="opacity: 0.25; shader: flat; depthTest: false;"></a-grid>
       <a-ring radius-inner="0.3" radius-outer="0.31" color="#22c55e" material="opacity: 0.3; shader: flat; depthTest: false;"></a-ring>
     </a-entity>
 
-    <!-- 카메라 및 시선 조준 원 구성 -->
     <a-entity id="cameraRig">
       <a-entity id="mainCamera" camera look-controls position="0 1.6 0">
         <a-entity id="centerFixationRay" raycaster="objects: .gaze-secure-trigger; far: 100; interval: 10;"></a-entity>
         
-        <!-- 왼쪽 눈 전용 조준 원 -->
-        <a-ring id="gaze-circle-left" radius-inner="0.02" radius-outer="0.03" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.8; depthTest: false;" stereo-eye-lock="eye: left"></a-ring>
-        <!-- 오른쪽 눈 전용 조준 원 -->
-        <a-ring id="gaze-circle-right" radius-inner="0.02" radius-outer="0.03" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.8; depthTest: false;" stereo-eye-lock="eye: right"></a-ring>
+        <a-ring id="gaze-circle-left" radius-inner="0.02" radius-outer="0.03" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.8; depthTest: false;" eye-layer="left"></a-ring>
+        <a-ring id="gaze-circle-right" radius-inner="0.02" radius-outer="0.03" color="#ffffff" position="0 0 -1" material="shader: flat; opacity: 0.8; depthTest: false;" eye-layer="right"></a-ring>
         
       </a-entity>
     </a-entity>
 
-    <!-- 시표 레이어 (원뿔 오브젝트를 완전히 제거하고 깔끔한 구체 형태로 복원) -->
     <a-entity id="magic-eye-board" visible="true">
-      <!-- 왼쪽 눈 시표 (적색 구체) -->
-      <a-entity id="left-eye-container" stereo-eye-lock="eye: left">
-        <a-entity id="balloon-left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.18; metalness: 0.1;"></a-entity>
-      </a-entity>
+      <a-entity id="balloon-left" geometry="primitive: sphere;" material="color: #ff2a2a; roughness: 0.18; metalness: 0.1;" eye-layer="left"></a-entity>
       
-      <!-- 오른쪽 눈 시표 (녹색 구체) -->
-      <a-entity id="right-eye-container" stereo-eye-lock="eye: right">
-        <a-entity id="balloon-right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.18; metalness: 0.1;"></a-entity>
-      </a-entity>
+      <a-entity id="balloon-right" geometry="primitive: sphere;" material="color: #10b981; roughness: 0.18; metalness: 0.1;" eye-layer="right"></a-entity>
 
-      <!-- 응시 충돌 박스 -->
-      <a-entity id="gaze-collision-trigger" class="gaze-secure-trigger" geometry="primitive: sphere;" material="visible: false;" stereo-eye-lock="eye: both"></a-entity>
+      <a-entity id="gaze-collision-trigger" class="gaze-secure-trigger" geometry="primitive: sphere;" material="visible: false;" eye-layer="both"></a-entity>
     </a-entity>
 
     <a-entity id="particle-group"></a-entity>
@@ -286,8 +299,6 @@
 
       const bLeft = document.getElementById('balloon-left');
       const bRight = document.getElementById('balloon-right');
-      const cLeft = document.getElementById('left-eye-container');
-      const cRight = document.getElementById('right-eye-container');
       const secureTrigger = document.getElementById('gaze-collision-trigger');
 
       const gazeLeftCircle = document.getElementById('gaze-circle-left');
@@ -298,19 +309,19 @@
       if (mode === "right-only") activeTurn = "right";
 
       if (activeTurn === "left") {
-        cLeft.setAttribute('visible', 'true'); 
-        cRight.setAttribute('visible', 'false');
-        bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
+        bLeft.setAttribute('visible', 'true'); bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
+        bRight.setAttribute('visible', 'false');
         
-        if(gazeLeftCircle) gazeLeftCircle.setAttribute('visible', 'false');
-        if(gazeRightCircle) gazeRightCircle.setAttribute('visible', 'true');
+        // [임상 조치] 하드웨어 레벨 차폐 제어 (컴포넌트 데이터 변경)
+        if(gazeLeftCircle) gazeLeftCircle.setAttribute('eye-layer', 'none'); // 레이어에서 아예 제거
+        if(gazeRightCircle) gazeRightCircle.setAttribute('eye-layer', 'right'); // 우안에만 노출
       } else {
-        cLeft.setAttribute('visible', 'false'); 
-        cRight.setAttribute('visible', 'true');
-        bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
+        bLeft.setAttribute('visible', 'false');
+        bRight.setAttribute('visible', 'true'); bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
         
-        if(gazeLeftCircle) gazeLeftCircle.setAttribute('visible', 'true');
-        if(gazeRightCircle) gazeRightCircle.setAttribute('visible', 'false');
+        // [임상 조치] 하드웨어 레벨 차폐 제어 (컴포넌트 데이터 변경)
+        if(gazeLeftCircle) gazeLeftCircle.setAttribute('eye-layer', 'left'); // 좌안에만 노출
+        if(gazeRightCircle) gazeRightCircle.setAttribute('eye-layer', 'none'); // 레이어에서 아예 제거
       }
 
       if (secureTrigger) secureTrigger.setAttribute('geometry', `primitive: sphere; radius: ${0.34 * userBaseMultiplier}`);
@@ -343,8 +354,6 @@
       const bLeft = document.getElementById('balloon-left');
       const bRight = document.getElementById('balloon-right');
       const secureTrigger = document.getElementById('gaze-collision-trigger');
-      const cLeft = document.getElementById('left-eye-container');
-      const cRight = document.getElementById('right-eye-container');
       
       const gazeLeftCircle = document.getElementById('gaze-circle-left');
       const gazeRightCircle = document.getElementById('gaze-circle-right');
@@ -360,19 +369,21 @@
       }
 
       if (activeTurn === "left") {
-        cLeft.setAttribute('visible', 'true'); cRight.setAttribute('visible', 'false');
-        bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
+        bLeft.setAttribute('visible', 'true'); bLeft.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
         bLeft.setAttribute('position', `${randX} ${randY} ${baseZ}`);
+        bRight.setAttribute('visible', 'false');
         
-        if(gazeLeftCircle) gazeLeftCircle.setAttribute('visible', 'false');
-        if(gazeRightCircle) gazeRightCircle.setAttribute('visible', 'true');
+        // 물리 레이어 마스크 전동 스위칭
+        if(gazeLeftCircle) gazeLeftCircle.setAttribute('eye-layer', 'none'); 
+        if(gazeRightCircle) gazeRightCircle.setAttribute('eye-layer', 'right'); 
       } else {
-        cLeft.setAttribute('visible', 'false'); cRight.setAttribute('visible', 'true');
-        bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
+        bLeft.setAttribute('visible', 'false');
+        bRight.setAttribute('visible', 'true'); bRight.setAttribute('geometry', `primitive: sphere; radius: ${finalRadius}`);
         bRight.setAttribute('position', `${randX} ${randY} ${baseZ}`);
         
-        if(gazeLeftCircle) gazeLeftCircle.setAttribute('visible', 'true');
-        if(gazeRightCircle) gazeRightCircle.setAttribute('visible', 'false');
+        // 물리 레이어 마스크 전동 스위칭
+        if(gazeLeftCircle) gazeLeftCircle.setAttribute('eye-layer', 'left'); 
+        if(gazeRightCircle) gazeRightCircle.setAttribute('eye-layer', 'none'); 
       }
 
       if (secureTrigger) {
@@ -439,7 +450,7 @@
         case "up": bgOffsetY += speedFactor; sky.setAttribute('material', `shader: flat; repeat: 16 16; side: back; offset: ${bgOffsetX} ${bgOffsetY}; opacity: ${opVal};`); sky.setAttribute('rotation', '0 0 0'); break;
         case "down": bgOffsetY -= speedFactor; sky.setAttribute('material', `shader: flat; repeat: 16 16; side: back; offset: ${bgOffsetX} ${bgOffsetY}; opacity: ${opVal};`); sky.setAttribute('rotation', '0 0 0'); break;
         case "cw": bgAngle += (speedFactor * 0.5); sky.setAttribute('material', `shader: flat; repeat: 16 16; side: back; offset: 0 0; opacity: ${opVal};`); sky.setAttribute('rotation', `0 0 ${bgAngle * 57.3}`); break;
-        case "ccw": bgAngle -= (speedFactor * 0.5); sky.setAttribute('material', `shader: flat; repeat: 16 16; side: back; offset: 0 0; opacity: ${opVal};`); sky.setAttribute('rotation', `0 0 ${bgAngle * 57.3}`); break;
+        case "ccw": bgAngle -= (speedFactor * 0.5); sky.setAttribute('material', `shader: flat; repeat: 16 16; side: back; offset: 0 0; opacity: #000;`); sky.setAttribute('rotation', `0 0 ${bgAngle * 57.3}`); break;
       }
     }
 
